@@ -1,6 +1,6 @@
 import express from 'express';
-import { MongoClient, ObjectId } from 'mongodb';
-import { Base64 } from 'js-base64';
+import { createClient } from "@supabase/supabase-js";
+// import { Base64 } from 'js-base64';
 // Use dotenv/config for loading environment variables in ESM
 import 'dotenv/config'; 
 import cors from 'cors';
@@ -39,46 +39,35 @@ const VITE_API_URL = process.env.VITE_API_URL;
 // Middleware
 app.use(express.json());
 
-let client, db;
 
-// Function to connect to MongoDB
-async function connectToMongo() {
-    console.log("Attempting to connect to MongoDB..." + URI);
-    try {
-        client = new MongoClient(URI);
-        await client.connect();
-        db = client.db("NunesAuto");
-        console.log("Successfully connected to MongoDB!");
-    } catch (error) {
-        console.error("MongoDB connection error:", error);
-        console.log("Unable to connect to Mongo DB")
-        throw error;
-    }
+
+// config/supabase.js
+// This is done so that a connection to supabase is possible
+
+let supabase;
+
+const connectToSupabase = async() => {
+
+  try{
+
+    const supabaseSetUp = createClient(
+process.env.SUPABASE_URL,
+    process.env.SUPABASE_SECRET_KEY
+);
+
+supabase = supabaseSetUp;
+
+console.log("Supabase successfully connected");
+
+  } catch (error){
+    console.error(error);
+    console.log("Error connecting to supabase in line 17 - 32");
+  }
 }
 
-// Middleware for basic authentication
-async function basicAuth(req, res, next) {
-  // ... (rest of basicAuth remains the same)
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Basic ")) {
-        return res.status(401).json({ message: "Authorization header missing or invalid" });
-    }
-    const base64Credentials = authHeader.split(" ")[1];
-    if (!base64Credentials) {
-        return res.status(400).json({ message: "Invalid Basic Authorization format" });
-    }
-    const credentials = Base64.decode(base64Credentials).split(":");
-    const email = credentials[0];
-    const password = credentials[1].trim();
-    const collection = db.collection("Users");
-    const user = await collection.findOne({ Email: email });
 
-    if (!user || Base64.decode(user.Password) !== password) {
-        return res.status(401).json({ message: "Invalid email or password" });
-    }
-    req.user = user;
-    next();
-}
+
+
 
 
 // --- PUBLIC ENDPOINTS (No authentication required) ---
@@ -86,33 +75,25 @@ async function basicAuth(req, res, next) {
 // Create a new user account
 app.post("/users", async (req, res) => {
     try {
-        const { NameAndSurname, Email, Password, Gender, UserNumber } = req.body;
-        if (!Email || !Password) {
+        const { userName, email, password, gennder } = req.body;
+        if (!email || !password) {
             return res.status(400).json({ message: "Email and password are required" });
         }
-        const collection = db.collection("Users");
-        const existingUser = await collection.findOne({ Email });
-        if (existingUser) {
-            return res.status(409).json({ message: "User with this email already exists" });
-        }
-        const encodedPassword = Base64.encode(Password);
-        const newUser = {
-            CustomerID: new Date().getTime(), NameAndSurname, Email,
-            Password: encodedPassword, Gender, UserNumber,
-            createdAt: new Date(), updatedAt: new Date()
-        };
-        const result = await collection.insertOne(newUser);
-        res.status(201).json({
-           message: "User created successfully",
-           user: {
-           _id: result.insertedId,
-           CustomerID: newUser.CustomerID,
-           NameAndSurname: newUser.NameAndSurname,
-           Email: newUser.Email,
-           Gender: newUser.Gender,
-           UserNumber: newUser.UserNumber
-          }
-        });
+//         const collection = db.collection("Users");
+//         const existingUser = await collection.findOne({ Email });
+//         if (existingUser) {
+//             return res.status(409).json({ message: "User with this email already exists" });
+//         }
+
+const { data, error } = await supabase.from("users").insert(req.body).select();
+
+if( error ){
+    console.log("Supabase experienced an error while creating the user: ",error)
+  return res.status(200).json({ message: error })
+}
+  console.log("Supabase successfully created the user: ",data)
+  return res.status(200).json({ message: data })
+
 
       } catch (error) {
         console.error("Error creating user:", error);
@@ -120,7 +101,11 @@ app.post("/users", async (req, res) => {
     }
 });
 
+
+
 let userCollection; // declare 
+
+
 
 // POST - Fetch user profile
 app.post("/profile", async (req, res) => {
@@ -170,6 +155,8 @@ app.get("/brands", async (req, res) => {
     }
 });
 
+
+
 // Get All Parts
 app.get("/parts", async (req, res) => {
     try {
@@ -181,6 +168,7 @@ app.get("/parts", async (req, res) => {
         res.status(500).json({ message: "Internal server error" });
     }
 });
+
 
 
 // Access the Cart and Orders collection
@@ -234,6 +222,7 @@ app.post("/cart", async (req, res) => {
 });
 
 
+
 // GET - Fetch cart items for a specific user
 app.get("/cart/:CustomerID", async (req, res) => {
   try {
@@ -255,6 +244,8 @@ app.get("/cart/:CustomerID", async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
+
+
 
 // DELETE - Remove item by user and id
 app.delete("/cart/:CustomerID/:cartItemId", async (req, res) => {
@@ -281,6 +272,8 @@ app.delete("/cart/:CustomerID/:cartItemId", async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
+
+
 
 app.post("/clear-cart", async (req, res) => {
   try {
@@ -340,6 +333,8 @@ app.post("/orders", async (req, res) => {
   }
 });
 
+
+
 // GET - Fetch all orders
 app.get("/orders/:CustomerID", async (req, res) => {
   try {
@@ -363,7 +358,7 @@ app.get("/orders/:CustomerID", async (req, res) => {
   } catch (error) {
     console.error("Error fetching orders:", error);
     res.status(500).json({ message: "Internal server error." });
-  }
+  }0
 });
     
 // Create transporter with full debug logging
@@ -437,38 +432,14 @@ app.get("/parts/:id", async (req, res) => {
     }
 });
 
+
+
 app.all("/send-email", (req, res, next) => {
   if (req.method !== "POST") {
     return res.status(405).json({ message: "Method Not Allowed" });
   }
   next();
 });
-
-
-app.use(basicAuth);
-
-// --- AUTHENTICATED ENDPOINTS (Require basicAuth header) ---
-// ... (All authenticated endpoints remain the same) ...
-
-// User Login / Password Check
-app.get("/checkpassword", async (req, res) => {
-    try {
-        const user = req.user;
-        const decodedPassword = Base64.decode(user.Password);
-        const providedPassword = req.headers.authorization.split(" ")[1];
-        const decodedProvidedPassword = Base64.decode(providedPassword).split(":")[1].trim();
-
-        if (decodedPassword === decodedProvidedPassword) {
-            res.status(200).json({ message: "Password is correct" });
-        } else {
-            res.status(401).json({ message: "Password is incorrect" });
-        }
-    } catch (error) {
-        console.error("Error checking password:", error);
-        res.status(500).json({ message: "Internal server error" });
-    }
-});
-
 
 
 
@@ -494,6 +465,8 @@ app.get("/users/profile", async (req, res) => {
         res.status(500).json({ message: "Internal server error" });
     }
 });
+
+
 
 // Update User Profile
 app.put("/users/profile", async (req, res) => {
@@ -530,6 +503,8 @@ app.put("/users/profile", async (req, res) => {
     }
 });
 
+
+
 // Delete User Account
 app.delete("/users/profile", async (req, res) => {
     try {
@@ -546,22 +521,19 @@ app.delete("/users/profile", async (req, res) => {
     }
 });
 
-// Export the necessary components for testing
-export { app, connectToMongo, client };
+
 
 // Start the server and connect to MongoDB
 async function startServer() {
     try {
-        await connectToMongo();
+        await connectToSupabase();
         app.listen(port, "0.0.0.0", () => {
             console.log(`Server listening at http://0.0.0.0/0:${port}`);
         });
     } catch (err) {
-        console.error("Failed to connect to MongoDB or start server:", err);
+        console.error("Failed to connect to supabase or start server:", err);
         process.exit(1);
     }
 }
 
-if (process.env.NODE_ENV !== 'test') {
     startServer();
-}
