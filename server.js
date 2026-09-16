@@ -21,11 +21,14 @@ const allowedOrigins = [
 ];
 
 
-// app.use(bodyParser.json());
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (!origin){
+       return callback(null, true);
+      }
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
     callback(new Error("Not allowed by CORS: " + origin));
   },
   credentials: true
@@ -56,7 +59,6 @@ process.env.SUPABASE_URL,
 );
 
 supabase = supabaseSetUp;
-
 console.log("Supabase successfully connected");
 
   } catch (error){
@@ -72,28 +74,28 @@ console.log("Supabase successfully connected");
 
 // --- PUBLIC ENDPOINTS (No authentication required) ---
 // ... (All endpoints remain the same) ...
-// Create a new user account
-app.post("/users", async (req, res) => {
-    try {
-        const { userName, email, password, gennder } = req.body;
-        if (!email || !password) {
-            return res.status(400).json({ message: "Email and password are required" });
-        }
-//         const collection = db.collection("Users");
-//         const existingUser = await collection.findOne({ Email });
-//         if (existingUser) {
-//             return res.status(409).json({ message: "User with this email already exists" });
-//         }
 
-const { data, error } = await supabase.from("users").insert(req.body).select();
+
+
+// Create a new user account
+app.post("/signup", async (req, res) => {
+
+    try {
+
+// getting the properties stored in the fetch function
+        const { userName, email } = req.body;
+
+  const { data,error } = await supabase.from("users").insert( req.body ).select();
 
 if( error ){
     console.log("Supabase experienced an error while creating the user: ",error)
-  return res.status(200).json({ message: error })
+  return res.status(400).json({ message: error })
 }
-  console.log("Supabase successfully created the user: ",data)
-  return res.status(200).json({ message: data })
 
+if ( data ){
+    console.log("Supabase successfully created the user: ",data)
+return res.status(200).json({ message: data })
+}
 
       } catch (error) {
         console.error("Error creating user:", error);
