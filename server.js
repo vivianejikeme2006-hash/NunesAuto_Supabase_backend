@@ -105,28 +105,40 @@ return res.status(200).json({ message: data })
 
 // Get All Brands
 app.get("/brands", async (req, res) => {
-    try {
-        const collection = db.collection("Brands");
-        const brands = await collection.find({}).toArray();
-        res.status(200).json(brands);
-    } catch (error) {
-        console.error("Error getting brands:", error);
-        res.status(500).json({ message: "Internal server error" });
-    }
+    try {
+        const { data: brands, error } = await supabase
+            .from("brands")
+            .select("*");
+
+        if (error) {
+            throw error;
+        }
+
+        res.status(200).json(brands);
+    } catch (error) {
+        console.error("Error getting brands:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
 });
 
 
 
 // Get All Parts
 app.get("/parts", async (req, res) => {
-    try {
-        const collection = db.collection("Parts");
-        const parts = await collection.find({}).toArray();
-        res.status(200).json(parts);
-    } catch (error) {
-        console.error("Error retrieving parts:", error);
-        res.status(500).json({ message: "Internal server error" });
-    }
+    try {
+        const { data: parts, error } = await supabase
+            .from("parts")
+            .select("*");
+
+        if (error) {
+            throw error;
+        }
+
+        res.status(200).json(parts);
+    } catch (error) {
+        console.error("Error retrieving parts:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
 });
 
 
@@ -137,24 +149,21 @@ let ordersCollection;
 let usersCollection;
 
 // POST - Add item to cart
-app.post("/cart", async (req, res) => {
+app.post("/cart/:user_id", async (req, res) => {
   try {
-    if (!cartCollection) {
-      cartCollection = db.collection("Cart");
-    }
     
-    const { item, CustomerID } = req.body;
+    // Getting the data being pushed into the data base
+    const { user_id } = req.params;
+    const { cartItem, quantity } = req.body;
 
-    // ✅ Safety check
-    if (!item || !item._id || !CustomerID) {
+    //Making sure that the required fields are present
+    if (!cartItem ||  !quantity ) {
       return res.status(400).json({ error: "Invalid item or missing CustomerID" });
     }
 
-    // ✅ Check only inside this user's cart
-    const existingItem = await cartCollection.findOne({
-      CustomerID: CustomerID,   // user-specific
-      itemId: item._id,         // part ID
-    });
+    // Checking to see if the user already has a cart
+
+    const { data, error } = await supabase.from("carts").select(user_id);
 
     if (existingItem) {
       return res.status(400).json({ error: "Item already in this user's cart" });
