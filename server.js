@@ -103,46 +103,6 @@ return res.status(200).json({ message: data })
 
 
 
-let userCollection; // declare 
-
-
-
-// POST - Fetch user profile
-app.post("/profile", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required." });
-    }
-
-    if (!userCollection) userCollection = db.collection("Users");
-
-    // Convert the provided password to Base64 (to match your stored value)
-    const encodedPassword = Buffer.from(password).toString("base64");
-
-    // Now find user based on Email and the encoded Password
-    const user = await userCollection.findOne({
-      Email: email,
-      Password: encodedPassword
-    });
-
-    if (!user) {
-      return res.status(401).json({ message: "Invalid email or password." });
-    }
-
-    // Remove password before sending user data
-    const { Password, ...userData } = user;
-    res.status(200).json(userData);
-
-  } catch (error) {
-    console.error("Error fetching profile:", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-});
-
-
-
 // Get All Brands
 app.get("/brands", async (req, res) => {
     try {
