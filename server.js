@@ -94,7 +94,7 @@ if( error ){
   console.log("Supabase successfully created the user: ",data)
   return res.status(200).json({ message: data })
 
-
+l
       } catch (error) {
         console.error("Error creating user:", error);
         res.status(500).json({ message: "Internal server error" });
