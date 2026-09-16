@@ -35,8 +35,6 @@ app.use(cors({
 }));
 
 
-
-const URI = process.env.URI;
 const VITE_API_URL = process.env.VITE_API_URL;
 
 // Middleware
