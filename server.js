@@ -163,9 +163,16 @@ app.post("/cart/:user_id", async (req, res) => {
 
     // Checking to see if the user already has a cart
 
-    const { data, error } = await supabase.from("carts").select(user_id);
+    const { data, error } = await supabase.from("carts").select("*").eq("user_id",user_id);
 
-    if (existingItem) {
+    if( error ) {
+      return res.status(401).json({ message: error })
+    }
+    if ( data.length === 0 ) {
+      return res.status(400).json({ error: "Item already in this user's cart" });
+    }
+
+     if ( data.length !== 0 ) {
       return res.status(400).json({ error: "Item already in this user's cart" });
     }
 
