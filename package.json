@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "dependencies": {
-    "@supabase/supabase-js": "^2.116.0",
     "@supabase/server": "^1.6.0",
+    "@supabase/supabase-js": "^2.116.0",
     "axios": "^1.7.2",
     "base-64": "^1.0.0",
     "body-parser": "^1.20.2",
@@ -14,7 +14,7 @@
     "js-base64": "^3.7.7",
     "mailersend": "^2.6.0",
     "nodemailer": "^7.0.10",
-    "nodemon": "^3.1.4"
+    "nodemon": "^3.1.14"
   },
   "devDependencies": {
     "@babel/cli": "^7.24.8",

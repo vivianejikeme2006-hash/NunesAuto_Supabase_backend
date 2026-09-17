@@ -208,13 +208,14 @@ app.get("/getMyCart/:user_id", async (req, res) => {
 
 
 // DELETE - Remove item by user and id
-app.delete("/cart/:user_id/:cart_item", async (req, res) => {
+app.delete("/cart/:user_id/:product_id", async (req, res) => {
   try {
 
     // DESTRUCTURING THE PROPERTIES THAT WE WILL BE USING FOR THE COLLECTION
     const { user_id, product_id } = req.params;
-
+console.log("DSestructuring occured");
     const { data,error } = await supabase.from("carts").select("*").eq("user_id",user_id,"product_id",product_id);
+console.log("Supabase select function occured");
 
     // IF THE PRODUCT IS NOT FOUND IN THE COLLECTION THEN IT CANNOT BE DELETED
     if( error ){
@@ -224,8 +225,9 @@ app.delete("/cart/:user_id/:cart_item", async (req, res) => {
 
     // IF THE PRODUCT IS FOUND INSIDE OF THE COLLECTION THEN WE WILL PROCEED TO DELETE IT
     if( data ){
+console.log( "item was found inside of the users collections");
 
-    const { data,error } = await supabase.from("carts").delete("*").eq("user_id",user_id,"product_id",product_id);
+    const { data,error } = await supabase.from("carts").delete().eq("user_id",user_id).eq("product_id",product_id).select();
 
     // IF AN ERROR OCCURED WHILE TRYING TO DELETE IT IT SHOULD BE REPORTED
     if( error ){
@@ -234,6 +236,8 @@ app.delete("/cart/:user_id/:cart_item", async (req, res) => {
 
     // REPORTING IF THE PRODUCT WAS SUCCESSFULLY DELETED
     if( data ){
+console.log("Product successfully deleted",data);
+
       return res.status(200).json({ message:"Product successfully deleted", data });
     }
 
@@ -252,26 +256,35 @@ app.delete("/cart/:user_id/:cart_item", async (req, res) => {
 
 
 
-app.post("/clear-cart", async (req, res) => {
+app.delete("/clearCart/:user_id", async (req, res) => {
   try {
-      if (!cartCollection) cartCollection = db.collection("Cart");
 
-    const { CustomerID } = req.body;
+    // DESTRUCTURING THE USER ID SO THAT WE KNOW WHICH USER_ID TO TARGET
+    const { user_id } = req.params;
+
     console.log("11:31")
+//CHECKING TO SEE IF THE USER HAS A CART BEFORE CLEARING THEIR CART
+    
+  const  { data,error } = await supabase.from("carts").select("*").eq("user_id",user_id);
 
+  if( error ){
+    console.error("The current user does not seem to have a cart", error );
+    return res.status(404).json({ message:"User currently does noty have a cart" })
+  }
 
-    if (!CustomerID) {
-      return res.status(401).json({ message: "CustomerID required" });
-    }
+  if( data ){
 
-    const result = await cartCollection.deleteMany({
-      CustomerID: Number(CustomerID)
-    });
+const { data,error } = await supabase.from("carts").delete().eq("user_id",user_id).select();
+   
+if(error){
+  console.log("Unable  to clear a users cart", error);
+  return res.status(401).json({ message:"Users cart has been successfully cleared", data });
+}
 
-    res.status(200).json({
-      message: "Cart cleared successfully",
-      deletedCount: result.deletedCount
-    });
+// IF THE CART HAS BEEN SUCCESSFULLY CLEARED THE FOLLOWING CODE WILL RUN
+  return res.status(200).json({ message:"Users cart has been successfully cleared", data });
+
+  }
 
   } catch (error) {
     console.error("Error clearing cart:", error);
