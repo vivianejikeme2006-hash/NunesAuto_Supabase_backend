@@ -21,19 +21,20 @@ const allowedOrigins = [
 ];
 
 
-// app.use(bodyParser.json());
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (!origin){
+       return callback(null, true);
+      }
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
     callback(new Error("Not allowed by CORS: " + origin));
   },
   credentials: true
 }));
 
 
-
-const URI = process.env.URI;
 const VITE_API_URL = process.env.VITE_API_URL;
 
 // Middleware
@@ -52,11 +53,10 @@ const connectToSupabase = async() => {
 
     const supabaseSetUp = createClient(
 process.env.SUPABASE_URL,
-    process.env.SUPABASE_SECRET_KEY
+process.env.SUPABASE_SECRET_KEY
 );
 
 supabase = supabaseSetUp;
-
 console.log("Supabase successfully connected");
 
   } catch (error){
@@ -72,29 +72,29 @@ console.log("Supabase successfully connected");
 
 // --- PUBLIC ENDPOINTS (No authentication required) ---
 // ... (All endpoints remain the same) ...
-// Create a new user account
-app.post("/users", async (req, res) => {
-    try {
-        const { userName, email, password, gennder } = req.body;
-        if (!email || !password) {
-            return res.status(400).json({ message: "Email and password are required" });
-        }
-//         const collection = db.collection("Users");
-//         const existingUser = await collection.findOne({ Email });
-//         if (existingUser) {
-//             return res.status(409).json({ message: "User with this email already exists" });
-//         }
 
-const { data, error } = await supabase.from("users").insert(req.body).select();
+
+
+// Create a new user account
+app.post("/signup", async (req, res) => {
+
+    try {
+
+// getting the properties stored in the fetch function
+        const { userName, email } = req.body;
+
+  const { data,error } = await supabase.from("users").insert( req.body ).select();
 
 if( error ){
     console.log("Supabase experienced an error while creating the user: ",error)
-  return res.status(200).json({ message: error })
+  return res.status(400).json({ message: error })
 }
-  console.log("Supabase successfully created the user: ",data)
-  return res.status(200).json({ message: data })
 
-l
+if ( data ){
+    console.log("Supabase successfully created the user: ",data)
+return res.status(200).json({ message: data })
+}
+
       } catch (error) {
         console.error("Error creating user:", error);
         res.status(500).json({ message: "Internal server error" });
@@ -103,70 +103,42 @@ l
 
 
 
-let userCollection; // declare 
-
-
-
-// POST - Fetch user profile
-app.post("/profile", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required." });
-    }
-
-    if (!userCollection) userCollection = db.collection("Users");
-
-    // Convert the provided password to Base64 (to match your stored value)
-    const encodedPassword = Buffer.from(password).toString("base64");
-
-    // Now find user based on Email and the encoded Password
-    const user = await userCollection.findOne({
-      Email: email,
-      Password: encodedPassword
-    });
-
-    if (!user) {
-      return res.status(401).json({ message: "Invalid email or password." });
-    }
-
-    // Remove password before sending user data
-    const { Password, ...userData } = user;
-    res.status(200).json(userData);
-
-  } catch (error) {
-    console.error("Error fetching profile:", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-});
-
-
-
 // Get All Brands
 app.get("/brands", async (req, res) => {
-    try {
-        const collection = db.collection("Brands");
-        const brands = await collection.find({}).toArray();
-        res.status(200).json(brands);
-    } catch (error) {
-        console.error("Error getting brands:", error);
-        res.status(500).json({ message: "Internal server error" });
-    }
+    try {
+        const { data: brands, error } = await supabase
+            .from("brands")
+            .select("*");
+
+        if (error) {
+            throw error;
+        }
+
+        res.status(200).json(brands);
+    } catch (error) {
+        console.error("Error getting brands:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
 });
 
 
 
 // Get All Parts
 app.get("/parts", async (req, res) => {
-    try {
-        const collection = db.collection("Parts");
-        const parts = await collection.find({}).toArray();
-        res.status(200).json(parts);
-    } catch (error) {
-        console.error("Error retrieving parts:", error);
-        res.status(500).json({ message: "Internal server error" });
-    }
+    try {
+        const { data: parts, error } = await supabase
+            .from("parts")
+            .select("*");
+
+        if (error) {
+            throw error;
+        }
+
+        res.status(200).json(parts);
+    } catch (error) {
+        console.error("Error retrieving parts:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
 });
 
 
@@ -177,43 +149,27 @@ let ordersCollection;
 let usersCollection;
 
 // POST - Add item to cart
-app.post("/cart", async (req, res) => {
+app.post("/addToCart/:user_id", async (req, res) => {
   try {
-    if (!cartCollection) {
-      cartCollection = db.collection("Cart");
-    }
     
-    const { item, CustomerID } = req.body;
+    // Getting the data being pushed into the data base
+    const { user_id } = req.params;
+    const { cart_item, quantity } = req.body;
 
-    // ✅ Safety check
-    if (!item || !item._id || !CustomerID) {
-      return res.status(400).json({ error: "Invalid item or missing CustomerID" });
+    //Making sure that the required fields are present
+    if (!cart_item ||  !quantity ) {
+      return res.status(400).json({ message: "Invalid item" });
     }
 
-    // ✅ Check only inside this user's cart
-    const existingItem = await cartCollection.findOne({
-      CustomerID: CustomerID,   // user-specific
-      itemId: item._id,         // part ID
-    });
+// ADDING ITEM TO THE CART
+    const { data, error } = await supabase.from("carts").insert({ user_id, cart_item, quantity }).select();
 
-    if (existingItem) {
-      return res.status(400).json({ error: "Item already in this user's cart" });
+    if( error ) {
+      return res.status(401).json({ message: error })
     }
-
-    // ✅ Insert with a new _id, but store itemId for tracking
-    const newCartItem = {
-      CustomerID: CustomerID,
-      itemId: item._id,
-      Name: item.Name,
-      Price: item.Price,
-      Image: item.Image,
-      Brand: item.Brand,
-      Quantity: 1,
-      createdAt: new Date(),
-    };
-
-    await cartCollection.insertOne(newCartItem);
-    res.status(201).json({ message: "Item added to cart", item: newCartItem });
+    if ( data ) {
+          res.status(201).json({ message: "Item added to cart", item: data });
+    }
 
   } catch (error) {
     console.error("Error adding to cart:", error);
@@ -224,19 +180,23 @@ app.post("/cart", async (req, res) => {
 
 
 // GET - Fetch cart items for a specific user
-app.get("/cart/:CustomerID", async (req, res) => {
+app.get("/getMyCart/:user_id", async (req, res) => {
   try {
-    if (!cartCollection) cartCollection = db.collection("Cart");
 
-    const { CustomerID } = req.params;
-    console.log("Request CustomerID:", CustomerID, typeof CustomerID);
+    // DESTRUCTURING REQUIRED PARAMETERS
+    const { user_id } = req.params;
 
-    // Convert string param to number
-    const customerIdNumber = Number(CustomerID);
-    console.log("Querying Cart collection for CustomerID:", customerIdNumber);
+    const { data,error } = await supabase.from("carts").select("*").eq("user_id",user_id);
 
-    const cartItems = await cartCollection.find({ CustomerID: customerIdNumber }).toArray();
-    console.log(`Found ${cartItems.length} items:`, cartItems);
+    if( error ){
+      console.error( "error getting personal cart ", error )
+      return res.status(404).json({ message : "Your cart is not found" });
+    }
+
+    if ( data ){
+      console.log("Successfully collected cart",data)
+      return res.status(200).json({ message : data })
+    }
 
     res.status(200).json(cartItems);
   } catch (error) {

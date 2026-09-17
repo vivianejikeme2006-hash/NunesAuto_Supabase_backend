@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
     "@supabase/server": "^1.6.0",
     "axios": "^1.7.2",
     "base-64": "^1.0.0",
