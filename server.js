@@ -154,15 +154,15 @@ app.post("/addToCart/:user_id", async (req, res) => {
     
     // Getting the data being pushed into the data base
     const { user_id } = req.params;
-    const { cart_item, quantity } = req.body;
+    const { product_id, cart_item, quantity } = req.body;
 
     //Making sure that the required fields are present
-    if (!cart_item ||  !quantity ) {
+    if (!cart_item ||  !quantity || !product_id ) {
       return res.status(400).json({ message: "Invalid item" });
     }
 
 // ADDING ITEM TO THE CART
-    const { data, error } = await supabase.from("carts").insert({ user_id, cart_item, quantity }).select();
+    const { data, error } = await supabase.from("carts").insert({ user_id, product_id, cart_item, quantity }).select();
 
     if( error ) {
       return res.status(401).json({ message: error })
@@ -208,24 +208,41 @@ app.get("/getMyCart/:user_id", async (req, res) => {
 
 
 // DELETE - Remove item by user and id
-app.delete("/cart/:CustomerID/:cartItemId", async (req, res) => {
+app.delete("/cart/:user_id/:cart_item", async (req, res) => {
   try {
-    const { CustomerID, cartItemId } = req.params;
 
-    const result = await cartCollection.deleteOne({
-      _id: new ObjectId(cartItemId),
-      CustomerID: Number(CustomerID)
-    });
+    // DESTRUCTURING THE PROPERTIES THAT WE WILL BE USING FOR THE COLLECTION
+    const { user_id, product_id } = req.params;
 
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ message: "Item not found in cart" });
+    const { data,error } = await supabase.from("carts").select("*").eq("user_id",user_id,"product_id",product_id);
+
+    // IF THE PRODUCT IS NOT FOUND IN THE COLLECTION THEN IT CANNOT BE DELETED
+    if( error ){
+      console.error("Unable to find the product to delete product to delete",error);
+      return res.status(409).json({ message: "Item not found in cart", error })
     }
 
-    const updatedCart = await cartCollection.find({
-      CustomerID: Number(CustomerID),
-    }).toArray();
+    // IF THE PRODUCT IS FOUND INSIDE OF THE COLLECTION THEN WE WILL PROCEED TO DELETE IT
+    if( data ){
 
-    res.status(200).json({ message: "Item removed", cart: updatedCart });
+    const { data,error } = await supabase.from("carts").delete("*").eq("user_id",user_id,"product_id",product_id);
+
+    // IF AN ERROR OCCURED WHILE TRYING TO DELETE IT IT SHOULD BE REPORTED
+    if( error ){
+      return res.status(409).json({ message:"Unable to delete the product", error });
+    }
+
+    // REPORTING IF THE PRODUCT WAS SUCCESSFULLY DELETED
+    if( data ){
+      return res.status(200).json({ message:"Product successfully deleted", data });
+    }
+
+    }
+
+    // const updatedCart = await cartCollection.find({
+    //   CustomerID: Number(CustomerID),
+    // }).toArray();
+
 
   } catch (error) {
     console.error("Error removing item from cart:", error);
@@ -237,7 +254,7 @@ app.delete("/cart/:CustomerID/:cartItemId", async (req, res) => {
 
 app.post("/clear-cart", async (req, res) => {
   try {
-    if (!cartCollection) cartCollection = db.collection("Cart");
+      if (!cartCollection) cartCollection = db.collection("Cart");
 
     const { CustomerID } = req.body;
     console.log("11:31")
