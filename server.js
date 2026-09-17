@@ -21,19 +21,20 @@ const allowedOrigins = [
 ];
 
 
-// app.use(bodyParser.json());
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (!origin){
+       return callback(null, true);
+      }
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
     callback(new Error("Not allowed by CORS: " + origin));
   },
   credentials: true
 }));
 
 
-
-const URI = process.env.URI;
 const VITE_API_URL = process.env.VITE_API_URL;
 
 // Middleware
@@ -56,7 +57,6 @@ process.env.SUPABASE_URL,
 );
 
 supabase = supabaseSetUp;
-
 console.log("Supabase successfully connected");
 
   } catch (error){
@@ -72,28 +72,28 @@ console.log("Supabase successfully connected");
 
 // --- PUBLIC ENDPOINTS (No authentication required) ---
 // ... (All endpoints remain the same) ...
-// Create a new user account
-app.post("/users", async (req, res) => {
-    try {
-        const { userName, email, password, gennder } = req.body;
-        if (!email || !password) {
-            return res.status(400).json({ message: "Email and password are required" });
-        }
-//         const collection = db.collection("Users");
-//         const existingUser = await collection.findOne({ Email });
-//         if (existingUser) {
-//             return res.status(409).json({ message: "User with this email already exists" });
-//         }
 
-const { data, error } = await supabase.from("users").insert(req.body).select();
+
+
+// Create a new user account
+app.post("/signup", async (req, res) => {
+
+    try {
+
+// getting the properties stored in the fetch function
+        const { userName, email } = req.body;
+
+  const { data,error } = await supabase.from("users").insert( req.body ).select();
 
 if( error ){
     console.log("Supabase experienced an error while creating the user: ",error)
-  return res.status(200).json({ message: error })
+  return res.status(400).json({ message: error })
 }
-  console.log("Supabase successfully created the user: ",data)
-  return res.status(200).json({ message: data })
 
+if ( data ){
+    console.log("Supabase successfully created the user: ",data)
+return res.status(200).json({ message: data })
+}
 
       } catch (error) {
         console.error("Error creating user:", error);
@@ -103,70 +103,42 @@ if( error ){
 
 
 
-let userCollection; // declare 
-
-
-
-// POST - Fetch user profile
-app.post("/profile", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required." });
-    }
-
-    if (!userCollection) userCollection = db.collection("Users");
-
-    // Convert the provided password to Base64 (to match your stored value)
-    const encodedPassword = Buffer.from(password).toString("base64");
-
-    // Now find user based on Email and the encoded Password
-    const user = await userCollection.findOne({
-      Email: email,
-      Password: encodedPassword
-    });
-
-    if (!user) {
-      return res.status(401).json({ message: "Invalid email or password." });
-    }
-
-    // Remove password before sending user data
-    const { Password, ...userData } = user;
-    res.status(200).json(userData);
-
-  } catch (error) {
-    console.error("Error fetching profile:", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-});
-
-
-
 // Get All Brands
 app.get("/brands", async (req, res) => {
-    try {
-        const collection = db.collection("Brands");
-        const brands = await collection.find({}).toArray();
-        res.status(200).json(brands);
-    } catch (error) {
-        console.error("Error getting brands:", error);
-        res.status(500).json({ message: "Internal server error" });
-    }
+    try {
+        const { data: brands, error } = await supabase
+            .from("brands")
+            .select("*");
+
+        if (error) {
+            throw error;
+        }
+
+        res.status(200).json(brands);
+    } catch (error) {
+        console.error("Error getting brands:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
 });
 
 
 
 // Get All Parts
 app.get("/parts", async (req, res) => {
-    try {
-        const collection = db.collection("Parts");
-        const parts = await collection.find({}).toArray();
-        res.status(200).json(parts);
-    } catch (error) {
-        console.error("Error retrieving parts:", error);
-        res.status(500).json({ message: "Internal server error" });
-    }
+    try {
+        const { data: parts, error } = await supabase
+            .from("parts")
+            .select("*");
+
+        if (error) {
+            throw error;
+        }
+
+        res.status(200).json(parts);
+    } catch (error) {
+        console.error("Error retrieving parts:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
 });
 
 
@@ -177,26 +149,30 @@ let ordersCollection;
 let usersCollection;
 
 // POST - Add item to cart
-app.post("/cart", async (req, res) => {
+app.post("/cart/:user_id", async (req, res) => {
   try {
-    if (!cartCollection) {
-      cartCollection = db.collection("Cart");
-    }
     
-    const { item, CustomerID } = req.body;
+    // Getting the data being pushed into the data base
+    const { user_id } = req.params;
+    const { cartItem, quantity } = req.body;
 
-    // ✅ Safety check
-    if (!item || !item._id || !CustomerID) {
+    //Making sure that the required fields are present
+    if (!cartItem ||  !quantity ) {
       return res.status(400).json({ error: "Invalid item or missing CustomerID" });
     }
 
-    // ✅ Check only inside this user's cart
-    const existingItem = await cartCollection.findOne({
-      CustomerID: CustomerID,   // user-specific
-      itemId: item._id,         // part ID
-    });
+    // Checking to see if the user already has a cart
 
-    if (existingItem) {
+    const { data, error } = await supabase.from("carts").select("*").eq("user_id",user_id);
+
+    if( error ) {
+      return res.status(401).json({ message: error })
+    }
+    if ( data.length === 0 ) {
+      return res.status(400).json({ error: "Item already in this user's cart" });
+    }
+
+     if ( data.length !== 0 ) {
       return res.status(400).json({ error: "Item already in this user's cart" });
     }
 
