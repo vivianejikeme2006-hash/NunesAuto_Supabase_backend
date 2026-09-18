@@ -243,11 +243,6 @@ console.log("Product successfully deleted",data);
 
     }
 
-    // const updatedCart = await cartCollection.find({
-    //   CustomerID: Number(CustomerID),
-    // }).toArray();
-
-
   } catch (error) {
     console.error("Error removing item from cart:", error);
     res.status(500).json({ message: "Internal server error" });
@@ -298,40 +293,47 @@ if(error){
 // --- NEW ORDERS ENDPOINTS ---
 // POST - Create a new order with all cart items
 app.post("/orders", async (req, res) => {
-  try {
-    if (!ordersCollection) {
-      ordersCollection = db.collection("Orders");
-    }
-    
-    const orderData = req.body; // The entire JSON object from the frontend
-    
-    // You can add validation here to ensure the data is what you expect
-    if (!orderData || !orderData.products || orderData.products.length === 0) {
-      return res.status(400).json({ message: "Order data is incomplete or empty." });
-    }
+  try {
+    const orderData = req.body; // The entire JSON object from the frontend
 
-    const result = await ordersCollection.insertOne(orderData);
-    
-    res.status(201).json({ 
-        message: "Order placed successfully!", 
-        orderId: result.insertedId 
-    });
+    // You can add validation here to ensure the data is what you expect
+    if (!orderData || !orderData.products || orderData.products.length === 0) {
+      return res.status(400).json({ message: "Order data is incomplete or empty." });
+    }
+
+    const { data, error } = await supabase
+      .from("Orders")
+      .insert(orderData)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
     console.log("Creating order at:", new Date().toISOString());
-  } catch (error) {
-    console.error("Error placing order:", error);
-    res.status(500).json({ message: "Internal server error." });
-  }
+
+    res.status(201).json({
+      message: "Order placed successfully!",
+      orderId: data.id
+    });
+  } catch (error) {
+    console.error("Error placing order:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
 });
 
 
 
+
+
+
+
+// done
+
 // GET - Fetch all orders
 app.get("/orders/:CustomerID", async (req, res) => {
   try {
-    if (!ordersCollection) {
-      ordersCollection = db.collection("Orders");
-    }
-
     const { CustomerID } = req.params;
     const customerIdNum = Number(CustomerID);
 
@@ -340,15 +342,20 @@ app.get("/orders/:CustomerID", async (req, res) => {
       return res.status(400).json({ message: "Invalid CustomerID." });
     }
 
-    const orders = await ordersCollection
-      .find({ CustomerID: customerIdNum })
-      .toArray();
+    const { data: orders, error } = await supabase
+      .from("Orders")
+      .select("*")
+      .eq("CustomerID", customerIdNum);
+
+    if (error) {
+      throw error;
+    }
 
     res.status(200).json(orders);
   } catch (error) {
     console.error("Error fetching orders:", error);
     res.status(500).json({ message: "Internal server error." });
-  }0
+  }
 });
     
 // Create transporter with full debug logging
@@ -361,6 +368,14 @@ export const transporter = nodemailer.createTransport({
   logger: true,   // logs SMTP activity
   debug: true     // detailed SMTP debug messages
 });
+
+
+
+
+
+
+
+
 
 // Helper function to send email
 // export async function sendEmail(to, subject, html) {
@@ -402,6 +417,11 @@ export const transporter = nodemailer.createTransport({
 //   }
 // });
 
+
+
+
+// UNDER CONSIDERATION
+
 // Get Parts by ID
 app.get("/parts/:id", async (req, res) => {
     try {
@@ -424,37 +444,59 @@ app.get("/parts/:id", async (req, res) => {
 
 
 
-app.all("/send-email", (req, res, next) => {
-  if (req.method !== "POST") {
-    return res.status(405).json({ message: "Method Not Allowed" });
-  }
-  next();
-});
+// app.all("/send-email", (req, res, next) => {
+//   if (req.method !== "POST") {
+//     return res.status(405).json({ message: "Method Not Allowed" });
+//   }
+//   next();
+// });
+
+
+
+
+
+
+
+
+// done 
 
 
 
 // Get User Profile
 app.get("/users/profile", async (req, res) => {
-    try {
-        const user = req.user;
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
-        }
-        const userProfile = {
-            NameAndSurname: user.NameAndSurname,
-            Email: user.Email,
-            Gender: user.Gender,
-            UserNumber: user.UserNumber,
-            CustomerID: user.CustomerID,
-            createdAt: user.createdAt,
-            updatedAt: user.updatedAt,
-        };
-        res.status(200).json(userProfile);
-    } catch (error) {
-        console.error("Error fetching user profile:", error);
-        res.status(500).json({ message: "Internal server error" });
-    }
+    try {
+        const userId = req.user?.id; // set by your Supabase auth middleware
+        if (!userId) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        const { data: userProfile, error } = await supabase
+            .from("Users")
+            .select("NameAndSurname, Email, Gender, UserNumber, CustomerID, createdAt, updatedAt")
+            .eq("id", userId)
+            .single();
+
+        if (error) {
+            if (error.code === "PGRST116") {
+                return res.status(404).json({ message: "User not found" });
+            }
+            throw error;
+        }
+
+        res.status(200).json(userProfile);
+    } catch (error) {
+        console.error("Error fetching user profile:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
 });
+
+
+
+
+
+
+
+
 
 
 
@@ -495,6 +537,12 @@ app.put("/users/profile", async (req, res) => {
 
 
 
+
+
+
+// work on it
+
+
 // Delete User Account
 app.delete("/users/profile", async (req, res) => {
     try {
@@ -510,6 +558,13 @@ app.delete("/users/profile", async (req, res) => {
         res.status(500).json({ message: "Internal server error" });
     }
 });
+
+
+
+
+
+
+
 
 
 
