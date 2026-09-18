@@ -53,7 +53,7 @@ const connectToSupabase = async() => {
 
     const supabaseSetUp = createClient(
 process.env.SUPABASE_URL,
-    process.env.SUPABASE_SECRET_KEY
+process.env.SUPABASE_SECRET_KEY
 );
 
 supabase = supabaseSetUp;
@@ -149,47 +149,27 @@ let ordersCollection;
 let usersCollection;
 
 // POST - Add item to cart
-app.post("/cart/:user_id", async (req, res) => {
+app.post("/addToCart/:user_id", async (req, res) => {
   try {
     
     // Getting the data being pushed into the data base
     const { user_id } = req.params;
-    const { cartItem, quantity } = req.body;
+    const { product_id, cart_item, quantity } = req.body;
 
     //Making sure that the required fields are present
-    if (!cartItem ||  !quantity ) {
-      return res.status(400).json({ error: "Invalid item or missing CustomerID" });
+    if (!cart_item ||  !quantity || !product_id ) {
+      return res.status(400).json({ message: "Invalid item" });
     }
 
-    // Checking to see if the user already has a cart
-
-    const { data, error } = await supabase.from("carts").select("*").eq("user_id",user_id);
+// ADDING ITEM TO THE CART
+    const { data, error } = await supabase.from("carts").insert({ user_id, product_id, cart_item, quantity }).select();
 
     if( error ) {
       return res.status(401).json({ message: error })
     }
-    if ( data.length === 0 ) {
-      return res.status(400).json({ error: "Item already in this user's cart" });
+    if ( data ) {
+          res.status(201).json({ message: "Item added to cart", item: data });
     }
-
-     if ( data.length !== 0 ) {
-      return res.status(400).json({ error: "Item already in this user's cart" });
-    }
-
-    // ✅ Insert with a new _id, but store itemId for tracking
-    const newCartItem = {
-      CustomerID: CustomerID,
-      itemId: item._id,
-      Name: item.Name,
-      Price: item.Price,
-      Image: item.Image,
-      Brand: item.Brand,
-      Quantity: 1,
-      createdAt: new Date(),
-    };
-
-    await cartCollection.insertOne(newCartItem);
-    res.status(201).json({ message: "Item added to cart", item: newCartItem });
 
   } catch (error) {
     console.error("Error adding to cart:", error);
@@ -200,19 +180,23 @@ app.post("/cart/:user_id", async (req, res) => {
 
 
 // GET - Fetch cart items for a specific user
-app.get("/cart/:CustomerID", async (req, res) => {
+app.get("/getMyCart/:user_id", async (req, res) => {
   try {
-    if (!cartCollection) cartCollection = db.collection("Cart");
 
-    const { CustomerID } = req.params;
-    console.log("Request CustomerID:", CustomerID, typeof CustomerID);
+    // DESTRUCTURING REQUIRED PARAMETERS
+    const { user_id } = req.params;
 
-    // Convert string param to number
-    const customerIdNumber = Number(CustomerID);
-    console.log("Querying Cart collection for CustomerID:", customerIdNumber);
+    const { data,error } = await supabase.from("carts").select("*").eq("user_id",user_id);
 
-    const cartItems = await cartCollection.find({ CustomerID: customerIdNumber }).toArray();
-    console.log(`Found ${cartItems.length} items:`, cartItems);
+    if( error ){
+      console.error( "error getting personal cart ", error )
+      return res.status(404).json({ message : "Your cart is not found" });
+    }
+
+    if ( data ){
+      console.log("Successfully collected cart",data)
+      return res.status(200).json({ message : data })
+    }
 
     res.status(200).json(cartItems);
   } catch (error) {
@@ -224,24 +208,41 @@ app.get("/cart/:CustomerID", async (req, res) => {
 
 
 // DELETE - Remove item by user and id
-app.delete("/cart/:CustomerID/:cartItemId", async (req, res) => {
+app.delete("/cart/:user_id/:cart_item", async (req, res) => {
   try {
-    const { CustomerID, cartItemId } = req.params;
 
-    const result = await cartCollection.deleteOne({
-      _id: new ObjectId(cartItemId),
-      CustomerID: Number(CustomerID)
-    });
+    // DESTRUCTURING THE PROPERTIES THAT WE WILL BE USING FOR THE COLLECTION
+    const { user_id, product_id } = req.params;
 
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ message: "Item not found in cart" });
+    const { data,error } = await supabase.from("carts").select("*").eq("user_id",user_id,"product_id",product_id);
+
+    // IF THE PRODUCT IS NOT FOUND IN THE COLLECTION THEN IT CANNOT BE DELETED
+    if( error ){
+      console.error("Unable to find the product to delete product to delete",error);
+      return res.status(409).json({ message: "Item not found in cart", error })
     }
 
-    const updatedCart = await cartCollection.find({
-      CustomerID: Number(CustomerID),
-    }).toArray();
+    // IF THE PRODUCT IS FOUND INSIDE OF THE COLLECTION THEN WE WILL PROCEED TO DELETE IT
+    if( data ){
 
-    res.status(200).json({ message: "Item removed", cart: updatedCart });
+    const { data,error } = await supabase.from("carts").delete("*").eq("user_id",user_id,"product_id",product_id);
+
+    // IF AN ERROR OCCURED WHILE TRYING TO DELETE IT IT SHOULD BE REPORTED
+    if( error ){
+      return res.status(409).json({ message:"Unable to delete the product", error });
+    }
+
+    // REPORTING IF THE PRODUCT WAS SUCCESSFULLY DELETED
+    if( data ){
+      return res.status(200).json({ message:"Product successfully deleted", data });
+    }
+
+    }
+
+    // const updatedCart = await cartCollection.find({
+    //   CustomerID: Number(CustomerID),
+    // }).toArray();
+
 
   } catch (error) {
     console.error("Error removing item from cart:", error);
@@ -253,7 +254,7 @@ app.delete("/cart/:CustomerID/:cartItemId", async (req, res) => {
 
 app.post("/clear-cart", async (req, res) => {
   try {
-    if (!cartCollection) cartCollection = db.collection("Cart");
+      if (!cartCollection) cartCollection = db.collection("Cart");
 
     const { CustomerID } = req.body;
     console.log("11:31")
@@ -284,40 +285,47 @@ app.post("/clear-cart", async (req, res) => {
 // --- NEW ORDERS ENDPOINTS ---
 // POST - Create a new order with all cart items
 app.post("/orders", async (req, res) => {
-  try {
-    if (!ordersCollection) {
-      ordersCollection = db.collection("Orders");
-    }
-    
-    const orderData = req.body; // The entire JSON object from the frontend
-    
-    // You can add validation here to ensure the data is what you expect
-    if (!orderData || !orderData.products || orderData.products.length === 0) {
-      return res.status(400).json({ message: "Order data is incomplete or empty." });
-    }
+  try {
+    const orderData = req.body; // The entire JSON object from the frontend
 
-    const result = await ordersCollection.insertOne(orderData);
-    
-    res.status(201).json({ 
-        message: "Order placed successfully!", 
-        orderId: result.insertedId 
-    });
+    // You can add validation here to ensure the data is what you expect
+    if (!orderData || !orderData.products || orderData.products.length === 0) {
+      return res.status(400).json({ message: "Order data is incomplete or empty." });
+    }
+
+    const { data, error } = await supabase
+      .from("Orders")
+      .insert(orderData)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
     console.log("Creating order at:", new Date().toISOString());
-  } catch (error) {
-    console.error("Error placing order:", error);
-    res.status(500).json({ message: "Internal server error." });
-  }
+
+    res.status(201).json({
+      message: "Order placed successfully!",
+      orderId: data.id
+    });
+  } catch (error) {
+    console.error("Error placing order:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
 });
 
 
 
+
+
+
+
+// done
+
 // GET - Fetch all orders
 app.get("/orders/:CustomerID", async (req, res) => {
   try {
-    if (!ordersCollection) {
-      ordersCollection = db.collection("Orders");
-    }
-
     const { CustomerID } = req.params;
     const customerIdNum = Number(CustomerID);
 
@@ -326,15 +334,20 @@ app.get("/orders/:CustomerID", async (req, res) => {
       return res.status(400).json({ message: "Invalid CustomerID." });
     }
 
-    const orders = await ordersCollection
-      .find({ CustomerID: customerIdNum })
-      .toArray();
+    const { data: orders, error } = await supabase
+      .from("Orders")
+      .select("*")
+      .eq("CustomerID", customerIdNum);
+
+    if (error) {
+      throw error;
+    }
 
     res.status(200).json(orders);
   } catch (error) {
     console.error("Error fetching orders:", error);
     res.status(500).json({ message: "Internal server error." });
-  }0
+  }
 });
     
 // Create transporter with full debug logging
@@ -347,6 +360,14 @@ export const transporter = nodemailer.createTransport({
   logger: true,   // logs SMTP activity
   debug: true     // detailed SMTP debug messages
 });
+
+
+
+
+
+
+
+
 
 // Helper function to send email
 // export async function sendEmail(to, subject, html) {
@@ -388,6 +409,11 @@ export const transporter = nodemailer.createTransport({
 //   }
 // });
 
+
+
+
+// UNDER CONSIDERATION
+
 // Get Parts by ID
 app.get("/parts/:id", async (req, res) => {
     try {
@@ -410,37 +436,59 @@ app.get("/parts/:id", async (req, res) => {
 
 
 
-app.all("/send-email", (req, res, next) => {
-  if (req.method !== "POST") {
-    return res.status(405).json({ message: "Method Not Allowed" });
-  }
-  next();
-});
+// app.all("/send-email", (req, res, next) => {
+//   if (req.method !== "POST") {
+//     return res.status(405).json({ message: "Method Not Allowed" });
+//   }
+//   next();
+// });
+
+
+
+
+
+
+
+
+// done 
 
 
 
 // Get User Profile
 app.get("/users/profile", async (req, res) => {
-    try {
-        const user = req.user;
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
-        }
-        const userProfile = {
-            NameAndSurname: user.NameAndSurname,
-            Email: user.Email,
-            Gender: user.Gender,
-            UserNumber: user.UserNumber,
-            CustomerID: user.CustomerID,
-            createdAt: user.createdAt,
-            updatedAt: user.updatedAt,
-        };
-        res.status(200).json(userProfile);
-    } catch (error) {
-        console.error("Error fetching user profile:", error);
-        res.status(500).json({ message: "Internal server error" });
-    }
+    try {
+        const userId = req.user?.id; // set by your Supabase auth middleware
+        if (!userId) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        const { data: userProfile, error } = await supabase
+            .from("Users")
+            .select("NameAndSurname, Email, Gender, UserNumber, CustomerID, createdAt, updatedAt")
+            .eq("id", userId)
+            .single();
+
+        if (error) {
+            if (error.code === "PGRST116") {
+                return res.status(404).json({ message: "User not found" });
+            }
+            throw error;
+        }
+
+        res.status(200).json(userProfile);
+    } catch (error) {
+        console.error("Error fetching user profile:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
 });
+
+
+
+
+
+
+
+
 
 
 
@@ -481,6 +529,12 @@ app.put("/users/profile", async (req, res) => {
 
 
 
+
+
+
+// work on it
+
+
 // Delete User Account
 app.delete("/users/profile", async (req, res) => {
     try {
@@ -496,6 +550,13 @@ app.delete("/users/profile", async (req, res) => {
         res.status(500).json({ message: "Internal server error" });
     }
 });
+
+
+
+
+
+
+
 
 
 
