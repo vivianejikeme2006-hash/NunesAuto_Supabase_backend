@@ -243,11 +243,6 @@ console.log("Product successfully deleted",data);
 
     }
 
-    // const updatedCart = await cartCollection.find({
-    //   CustomerID: Number(CustomerID),
-    // }).toArray();
-
-
   } catch (error) {
     console.error("Error removing item from cart:", error);
     res.status(500).json({ message: "Internal server error" });
