@@ -35,14 +35,12 @@ app.use(cors({
 }));
 
 
-const VITE_API_URL = process.env.VITE_API_URL;
 
 // Middleware
 app.use(express.json());
 
 
 
-// config/supabase.js
 // This is done so that a connection to supabase is possible
 
 let supabase;
@@ -67,7 +65,46 @@ console.log("Supabase successfully connected");
 
 
 
+const authentication = async(req, res, next) =>{
+  try{
 
+    const authHeader = req.headers.authorization;
+    console.log( req.headers)
+    console.log( req.headers.authorization)
+
+    // Making sure that the authorization and access token are present
+    if( !authHeader || !authHeader.includes("Bearer ") ){
+      return res.status(401).json({ message: "User is not authorised" });
+    }
+
+    // Seperatin "bearer" from the actual access token
+    const accessTokenArray = authHeader.split(" ");
+
+    // Collecting the actual access token value
+    const accessToken = accessTokenArray[1];
+
+    // Authenticating to see if the user is actually stored 
+    // inside of our collection before permitting the action
+    const { data, error } = await supabase.auth.getUser(accessToken);
+
+    if( error ){
+      console.error("Error getting the authenticated user from supabase auth using their accesstoken");
+      return res.status(401).json({ message: `Error authenticating the user: ${error}` })
+    }
+
+    // STORING THE ACTUAL ACCESS TOKEN OF THE USER
+console.log("User object returned by authentication function: ",data )
+    req.user = data
+
+    // IF THE USER IS AUTHENTICATED THE FETCH REQUEST SHOULD PROCEED
+    next()
+
+  }
+  catch (error){
+    console.error("Error trying to authenticate the user ",error );
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
 
 
 // --- PUBLIC ENDPOINTS (No authentication required) ---
@@ -143,17 +180,22 @@ app.get("/parts", async (req, res) => {
 
 
 
-// Access the Cart and Orders collection
-let cartCollection;
-let ordersCollection;
-let usersCollection;
+// CALLING THE AUTHENTICATION FUNCTION
+// Everything below this requires authentication
+app.use(authentication);
+
 
 // POST - Add item to cart
-app.post("/addToCart/:user_id", async (req, res) => {
+app.post("/addToCart", async (req, res) => {
   try {
     
-    // Getting the data being pushed into the data base
-    const { user_id } = req.params;
+    // Getting the authenticated users information
+    const { user } = req.user;
+
+    // Getting the id of the user
+
+    const { id } = user;
+    console.log("Authentication function provided supabase auth users Id: ",req,user)
     const { product_id, cart_item, quantity } = req.body;
 
     //Making sure that the required fields are present
@@ -162,7 +204,7 @@ app.post("/addToCart/:user_id", async (req, res) => {
     }
 
 // ADDING ITEM TO THE CART
-    const { data, error } = await supabase.from("carts").insert({ user_id, product_id, cart_item, quantity }).select();
+    const { data, error } = await supabase.from("carts").insert({ user_id: id , product_id, cart_item, quantity }).select();
 
     if( error ) {
       return res.status(401).json({ message: error })
@@ -288,35 +330,48 @@ if(error){
 });
 
 
-
+// INSPECTING VIVIANS ENDPOINTS TO BE TESTED WITH POSTMAN
 
 // --- NEW ORDERS ENDPOINTS ---
-// POST - Create a new order with all cart items
-app.post("/orders", async (req, res) => {
+// POST - Create a new order with customers current cart items
+app.post("/newOrder/:user_id", async (req, res) => {
   try {
-    const orderData = req.body; // The entire JSON object from the frontend
 
-    // You can add validation here to ensure the data is what you expect
-    if (!orderData || !orderData.products || orderData.products.length === 0) {
+    // DESTRUCTURING ALL OF THE [PROPERTIES THAT WE WILL RECEIVE FROM THE FRONT END
+    const { user_id } = req.params;
+    const { ordered_products, delivery_option, sub_total, total } = req.body; 
+
+    // MAKING SURE THAT THE CART IS NOT EMPTY AND THAT THE CUSTOMER IS NOT TRYING TO MAKE AN ORDER WITH AN EMPTY CART 
+    if ( ordered_products.length === 0) {
       return res.status(400).json({ message: "Order data is incomplete or empty." });
     }
 
     const { data, error } = await supabase
-      .from("Orders")
-      .insert(orderData)
+      .from("orders")
+      .insert( { user_id, ...req.body })
       .select()
       .single();
 
     if (error) {
-      throw error;
+      console.error("There was an error trying to check out a users cart in the post orders endpoint: ",error);
+      return res.status(401).json({ message: "Unable to post the cart to the orders collection", error })
     }
 
-    console.log("Creating order at:", new Date().toISOString());
+    if( data ){
+ res.status(201).json({ message: "Order placed successfully!" });
 
-    res.status(201).json({
-      message: "Order placed successfully!",
-      orderId: data.id
-    });
+    const { data, error } = supabase.from("carts").delete().eq("user_id",user_id).select();
+
+    if( error ){
+      return res.status(409).json({ message: "Cart successfully ordered but unable to clear your cart"});
+    }
+
+if( data ){
+return res.status(200).json({ message:"Checkout cart successfully moved to orders and deleted  from the carts table" });
+};
+
+    }
+
   } catch (error) {
     console.error("Error placing order:", error);
     res.status(500).json({ message: "Internal server error." });
@@ -329,26 +384,51 @@ app.post("/orders", async (req, res) => {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // done
 
 // GET - Fetch all orders
-app.get("/orders/:CustomerID", async (req, res) => {
+app.get("/myOrders/:user_id", async (req, res) => {
   try {
-    const { CustomerID } = req.params;
-    const customerIdNum = Number(CustomerID);
+
+    // DESTRUCTURING USER ID TO KNOW WHICH VARIABLES WE ARE USING TO GET THE ID
+    const { user_id } = req.params;
 
     // Validate ID
-    if (!customerIdNum) {
+    if ( !user_id ) {
       return res.status(400).json({ message: "Invalid CustomerID." });
     }
 
     const { data: orders, error } = await supabase
-      .from("Orders")
+      .from("orders")
       .select("*")
-      .eq("CustomerID", customerIdNum);
+      .eq("user_id", user_id);
 
-    if (error) {
-      throw error;
+    if ( error ) {
+      console.error("Error while trying to get the users orders: ", error)
+     return res.status(400).json({ messsage: "Error while trying to get the users orders", error })
     }
 
     res.status(200).json(orders);
@@ -463,27 +543,29 @@ app.get("/parts/:id", async (req, res) => {
 
 
 // Get User Profile
-app.get("/users/profile", async (req, res) => {
+app.get("/usersProfile/:user_id", async (req, res) => {
     try {
-        const userId = req.user?.id; // set by your Supabase auth middleware
-        if (!userId) {
+
+      // DESTRUCTURING THE USER ID TO GET THE USERS PROFILE
+const { user_id } = req.params;
+
+        if (!user_id) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        const { data: userProfile, error } = await supabase
-            .from("Users")
-            .select("NameAndSurname, Email, Gender, UserNumber, CustomerID, createdAt, updatedAt")
-            .eq("id", userId)
+        const { data, error } = await supabase
+            .from("users")
+            .select("*")
+            .eq("id", user_id)
             .single();
 
         if (error) {
-            if (error.code === "PGRST116") {
-                return res.status(404).json({ message: "User not found" });
-            }
-            throw error;
+           console.error("Unable to get the current users profile");
+           return res.status(400).json({ message:"Unable to get the users current profile", error })
         }
 
-        res.status(200).json(userProfile);
+        return res.status(200).json(data);
+
     } catch (error) {
         console.error("Error fetching user profile:", error);
         res.status(500).json({ message: "Internal server error" });
@@ -501,7 +583,7 @@ app.get("/users/profile", async (req, res) => {
 
 
 // Update User Profile
-app.put("/users/profile", async (req, res) => {
+app.put("/updateUsersProfile", async (req, res) => {
     try {
         const { NameAndSurname, Email, Gender, UserNumber } = req.body;
         const { _id } = req.user;
@@ -544,7 +626,7 @@ app.put("/users/profile", async (req, res) => {
 
 
 // Delete User Account
-app.delete("/users/profile", async (req, res) => {
+app.delete("/removeMyProfile", async (req, res) => {
     try {
         const { _id } = req.user;
         const collection = db.collection("Users");
