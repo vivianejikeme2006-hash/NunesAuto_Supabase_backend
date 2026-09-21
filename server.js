@@ -143,15 +143,15 @@ return res.status(200).json({ message: data })
 // Get All Brands
 app.get("/brands", async (req, res) => {
     try {
-        const { data: brands, error } = await supabase
-            .from("brands")
-            .select("*");
+        const { data, error } = await supabase.from("brands").select("*");
 
         if (error) {
-            throw error;
+            console.error(error);
+            return res.status(400).json({ message: "Unable to collect the brands from the brands collection: ",error})
         }
 
-        res.status(200).json(brands);
+            return res.status(200).json({ message: data });
+
     } catch (error) {
         console.error("Error getting brands:", error);
         res.status(500).json({ message: "Internal server error" });
@@ -163,15 +163,15 @@ app.get("/brands", async (req, res) => {
 // Get All Parts
 app.get("/parts", async (req, res) => {
     try {
-        const { data: parts, error } = await supabase
-            .from("parts")
-            .select("*");
+        const { data, error } = await supabase.from("parts").select("*");
 
         if (error) {
-            throw error;
+            console.error(error);
+            return res.status(400).json({ message: "Unable to collect the parts from the parts collection: ",error})
         }
 
-        res.status(200).json(parts);
+     return res.status(200).json({ message: data });
+
     } catch (error) {
         console.error("Error retrieving parts:", error);
         res.status(500).json({ message: "Internal server error" });
