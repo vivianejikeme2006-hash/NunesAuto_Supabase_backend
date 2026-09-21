@@ -143,9 +143,7 @@ return res.status(200).json({ message: data })
 // Get All Brands
 app.get("/brands", async (req, res) => {
     try {
-        const { data, error } = await supabase
-            .from("brands")
-            .select("*");
+        const { data, error } = await supabase.from("brands").select("*");
 
         if (error) {
             console.error(error);
