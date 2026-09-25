@@ -69,8 +69,8 @@ const authentication = async(req, res, next) =>{
   try{
 
     const authHeader = req.headers.authorization;
-    console.log( req.headers)
-    console.log( req.headers.authorization)
+    // console.log( req.headers)
+    // console.log( req.headers.authorization)
 
     // Making sure that the authorization and access token are present
     if( !authHeader || !authHeader.includes("Bearer ") ){
@@ -93,7 +93,7 @@ const authentication = async(req, res, next) =>{
     }
 
     // STORING THE ACTUAL ACCESS TOKEN OF THE USER
-console.log("User object returned by authentication function: ",data )
+// console.log("User object returned by authentication function: ",data )
     req.user = data
 
     // IF THE USER IS AUTHENTICATED THE FETCH REQUEST SHOULD PROCEED
@@ -195,7 +195,8 @@ app.post("/addToCart", async (req, res) => {
     // Getting the id of the user
 
     const { id } = user;
-    console.log("Authentication function provided supabase auth users Id: ",req,user)
+
+    // console.log("Authentication function provided supabase auth users Id: ",req,user)
     const { product_id, cart_item, quantity } = req.body;
 
     //Making sure that the required fields are present
@@ -210,7 +211,7 @@ app.post("/addToCart", async (req, res) => {
       return res.status(401).json({ message: error })
     }
     if ( data ) {
-          res.status(201).json({ message: "Item added to cart", item: data });
+          res.status(200).json({ message: "Item added to cart", item: data });
     }
 
   } catch (error) {
@@ -222,13 +223,17 @@ app.post("/addToCart", async (req, res) => {
 
 
 // GET - Fetch cart items for a specific user
-app.get("/getMyCart/:user_id", async (req, res) => {
+app.get("/getMyCart", async (req, res) => {
   try {
 
-    // DESTRUCTURING REQUIRED PARAMETERS
-    const { user_id } = req.params;
+  // Getting the authenticated users information
+    const { user } = req.user;
 
-    const { data,error } = await supabase.from("carts").select("*").eq("user_id",user_id);
+    // Getting the id of the user
+
+    const { id } = user;
+
+    const { data,error } = await supabase.from("carts").select("*").eq("user_id",id);
 
     if( error ){
       console.error( "error getting personal cart ", error )
@@ -240,7 +245,6 @@ app.get("/getMyCart/:user_id", async (req, res) => {
       return res.status(200).json({ message : data })
     }
 
-    res.status(200).json(cartItems);
   } catch (error) {
     console.error("Error retrieving user cart:", error);
     res.status(500).json({ message: "Internal server error" });
@@ -250,13 +254,21 @@ app.get("/getMyCart/:user_id", async (req, res) => {
 
 
 // DELETE - Remove item by user and id
-app.delete("/cart/:user_id/:product_id", async (req, res) => {
+app.delete("/cart/:cart_id", async (req, res) => {
   try {
 
-    // DESTRUCTURING THE PROPERTIES THAT WE WILL BE USING FOR THE COLLECTION
-    const { user_id, product_id } = req.params;
-console.log("DSestructuring occured");
-    const { data,error } = await supabase.from("carts").select("*").eq("user_id",user_id,"product_id",product_id);
+   // Getting the authenticated users information
+    const { user } = req.user;
+console.log("User token collected from authentication functoion: ", user)
+    // Getting the id of the user
+
+    const { id } = user;
+
+const { cart_id } = req.params;
+
+console.log("Destructuring occured");
+ 
+    const { data,error } = await supabase.from("carts").select("*").eq("user_id",id).eq("id",cart_id);
 console.log("Supabase select function occured");
 
     // IF THE PRODUCT IS NOT FOUND IN THE COLLECTION THEN IT CANNOT BE DELETED
@@ -269,7 +281,7 @@ console.log("Supabase select function occured");
     if( data ){
 console.log( "item was found inside of the users collections");
 
-    const { data,error } = await supabase.from("carts").delete().eq("user_id",user_id).eq("product_id",product_id).select();
+    const { data,error } = await supabase.from("carts").delete().eq("user_id",id).eq("id",cart_id).select();
 
     // IF AN ERROR OCCURED WHILE TRYING TO DELETE IT IT SHOULD BE REPORTED
     if( error ){
