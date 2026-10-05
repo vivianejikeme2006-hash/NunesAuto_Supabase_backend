@@ -305,85 +305,81 @@ console.log("Product successfully deleted",data);
 
 
 
-app.delete("/clearCart/:user_id", async (req, res) => {
-  try {
-
-    // DESTRUCTURING THE USER ID SO THAT WE KNOW WHICH USER_ID TO TARGET
-    const { user_id } = req.params;
-
-    console.log("11:31")
-//CHECKING TO SEE IF THE USER HAS A CART BEFORE CLEARING THEIR CART
-    
-  const  { data,error } = await supabase.from("carts").select("*").eq("user_id",user_id);
-
-  if( error ){
-    console.error("The current user does not seem to have a cart", error );
-    return res.status(404).json({ message:"User currently does noty have a cart" })
-  }
-
-  if( data ){
-
-const { data,error } = await supabase.from("carts").delete().eq("user_id",user_id).select();
-   
-if(error){
-  console.log("Unable  to clear a users cart", error);
-  return res.status(401).json({ message:"Users cart has been successfully cleared", data });
-}
-
-// IF THE CART HAS BEEN SUCCESSFULLY CLEARED THE FOLLOWING CODE WILL RUN
-  return res.status(200).json({ message:"Users cart has been successfully cleared", data });
-
-  }
-
-  } catch (error) {
-    console.error("Error clearing cart:", error);
-    res.status(500).json({ message: "Internal server error clearing cart" });
-  }
-});
-
-
 // INSPECTING VIVIANS ENDPOINTS TO BE TESTED WITH POSTMAN
 
 // --- NEW ORDERS ENDPOINTS ---
-// POST - Create a new order with customers current cart items
-app.post("/newOrder/:user_id", async (req, res) => {
+// POST - customers current cart items moved to orders
+app.post("/newOrder", async (req, res) => {
   try {
 
-    // DESTRUCTURING ALL OF THE [PROPERTIES THAT WE WILL RECEIVE FROM THE FRONT END
-    const { user_id } = req.params;
-    const { ordered_products, delivery_option, sub_total, total } = req.body; 
+   // Getting the authenticated users information
+    const { user } = req.user;
+    console.log("User token collected from authentication functoion: ", user);
+
+   // Getting the id of the user
+    const { id } = user;
+
+    // console.log(`The users id ${id}`)
+
+   // DESTRUCTURING ALL OF THE [PROPERTIES THAT WE WILL RECEIVE FROM THE FRONT END
+    const { ordered_products,
+            delivery_option,
+            sub_total,
+            total,
+            address,
+            city,
+            suburb,
+            province,
+            postal_code 
+          } = req.body; 
 
     // MAKING SURE THAT THE CART IS NOT EMPTY AND THAT THE CUSTOMER IS NOT TRYING TO MAKE AN ORDER WITH AN EMPTY CART 
     if ( ordered_products.length === 0) {
       return res.status(400).json({ message: "Order data is incomplete or empty." });
     }
 
-    const { data, error } = await supabase
-      .from("orders")
-      .insert( { user_id, ...req.body })
-      .select()
-      .single();
+    const { data, error } = await supabase.from("orders").insert({ user_id: id, ordered_products, delivery_option, sub_total, total }).select();
 
-    if (error) {
+    if ( error ) {
       console.error("There was an error trying to check out a users cart in the post orders endpoint: ",error);
       return res.status(401).json({ message: "Unable to post the cart to the orders collection", error })
     }
 
+    // STORING THE ID OF THE PLACED ORDER SO THAT IT CAN BE USED AS THE FOREIGN KEY INSIDE OF THE DELIVERYLOCATION  TABLE
+    const storedId = data[0].id;
+    // console.log(`Order just pushed to the orders collection ${data}`);
+    // console.log(data);
+
     if( data ){
- res.status(201).json({ message: "Order placed successfully!" });
 
-    const { data, error } = supabase.from("carts").delete().eq("user_id",user_id).select();
+      // IF THE ORDER WAS SUCCESSFULLY MADE THE PRODUCTS' DELIVERY DETAILS ARE TO BE STORED INSIDE OF THE DELIVERY LOCATION COLLECTION
 
-    if( error ){
-      return res.status(409).json({ message: "Cart successfully ordered but unable to clear your cart"});
+      const { data,error } = await supabase.from("deliveryLocation").insert({ user_id: id, order_id: storedId, address, city, suburb, province, postal_code  }).select();
+      console.log("Order details successfully added to the 'deliveryLocation' table.");
+
+      if( error ){
+        console.error( error );
+        return res.status(400).json({ message: "Unable to store the users delivery information in the right table."})
+      }
+
+      // IF THE DELIVERY LOCATION DETAILS HAVE BEEN SUCCESSFULLY DELIVERED IT WOULD NOT BE TIME TO DELETE ALL OF THAT INFORMATION FROM THE CARTS TABLE
+
+      if( data ){
+        const { data, error } = await supabase.from("carts").delete().eq("user_id",id).select();
+        res.status(201).json({ message: "Order placed successfully!" });
+
+        if( error ){
+        return res.status(409).json({ message: `Cart successfully ordered but unable to clear your cart`, error});
+        }
+
+        if( data ){
+        return res.status(200).json({ message:"Checkout cart successfully moved to orders and deleted  from the carts table" });
+        };
+
+      }
+
     }
-
-if( data ){
-return res.status(200).json({ message:"Checkout cart successfully moved to orders and deleted  from the carts table" });
-};
-
-    }
-
+    
   } catch (error) {
     console.error("Error placing order:", error);
     res.status(500).json({ message: "Internal server error." });
@@ -654,6 +650,42 @@ app.delete("/removeMyProfile", async (req, res) => {
 });
 
 
+
+app.delete("/clearCart/:user_id", async (req, res) => {
+  try {
+
+    // DESTRUCTURING THE USER ID SO THAT WE KNOW WHICH USER_ID TO TARGET
+    const { user_id } = req.params;
+
+    console.log("11:31")
+//CHECKING TO SEE IF THE USER HAS A CART BEFORE CLEARING THEIR CART
+    
+  const  { data,error } = await supabase.from("carts").select("*").eq("user_id",user_id);
+
+  if( error ){
+    console.error("The current user does not seem to have a cart", error );
+    return res.status(404).json({ message:"User currently does noty have a cart" })
+  }
+
+  if( data ){
+
+const { data,error } = await supabase.from("carts").delete().eq("user_id",user_id).select();
+   
+if(error){
+  console.log("Unable  to clear a users cart", error);
+  return res.status(401).json({ message:"Users cart has been successfully cleared", data });
+}
+
+// IF THE CART HAS BEEN SUCCESSFULLY CLEARED THE FOLLOWING CODE WILL RUN
+  return res.status(200).json({ message:"Users cart has been successfully cleared", data });
+
+  }
+
+  } catch (error) {
+    console.error("Error clearing cart:", error);
+    res.status(500).json({ message: "Internal server error clearing cart" });
+  }
+});
 
 
 
