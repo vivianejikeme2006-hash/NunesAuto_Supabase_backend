@@ -1,15 +1,17 @@
 import express from 'express';
 import { createClient } from "@supabase/supabase-js";
-// import { Base64 } from 'js-base64';
-// Use dotenv/config for loading environment variables in ESM
 import 'dotenv/config'; 
 import cors from 'cors';
 import { Buffer } from "buffer";
 import nodemailer from "nodemailer";
+import OpenAI from "openai";
 
 const port = 3000;
 const app = express();
 
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 const allowedOrigins = [
   "http://localhost:5173",

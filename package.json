@@ -14,7 +14,8 @@
     "js-base64": "^3.7.7",
     "mailersend": "^2.6.0",
     "nodemailer": "^7.0.10",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "openai": "^7.28.0"
   },
   "devDependencies": {
     "@babel/cli": "^7.24.8",
