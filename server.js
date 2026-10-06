@@ -388,7 +388,55 @@ app.post("/newOrder", async (req, res) => {
 
 
 
+// GET - Fetch all orders
+app.get("/myOrders", async (req, res) => {
+  try {
 
+    // DESTRUCTURING USER IDFROM SUPABASE AUTH
+    const { user } = req.user;
+const { id } = user;
+
+    // Validate ID
+    if ( !id ) {
+      return res.status(400).json({ message: "Invalid CustomerID." });
+    }
+
+    const { data: orders, error } = await supabase
+      .from("orders")
+      .select("*")
+      .eq("user_id", id);
+
+    if ( error ) {
+      console.error("Error while trying to get the users orders: ", error)
+     return res.status(400).json({ messsage: "Error while trying to get the users orders", error })
+    }
+
+    res.status(200).json({ message: orders });
+  } catch (error) {
+    console.error("Error fetching orders:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+});
+
+
+
+// ADMINS ADDING A NEW ITME TO THEIR CART
+app.post("/addNewPart", async (req, res) => {
+try{
+
+  const{ data, error } = await supabase.from("parts").insert(req.body).select();
+
+  if( error ){
+    return res.status(400).json({ message: `Unable to add the product to the parts collection ${error}` })
+  }
+
+  return res.status(200).json({ message: `Added the item to the parts collection ${data}`})
+
+} catch (error){
+  console.error("Error tryingto create a new car part: ",error);
+  return res.status(500).json({message: "Internal server error"})
+}
+})
 
 
 
@@ -417,35 +465,6 @@ app.post("/newOrder", async (req, res) => {
 
 // done
 
-// GET - Fetch all orders
-app.get("/myOrders/:user_id", async (req, res) => {
-  try {
-
-    // DESTRUCTURING USER ID TO KNOW WHICH VARIABLES WE ARE USING TO GET THE ID
-    const { user_id } = req.params;
-
-    // Validate ID
-    if ( !user_id ) {
-      return res.status(400).json({ message: "Invalid CustomerID." });
-    }
-
-    const { data: orders, error } = await supabase
-      .from("orders")
-      .select("*")
-      .eq("user_id", user_id);
-
-    if ( error ) {
-      console.error("Error while trying to get the users orders: ", error)
-     return res.status(400).json({ messsage: "Error while trying to get the users orders", error })
-    }
-
-    res.status(200).json(orders);
-  } catch (error) {
-    console.error("Error fetching orders:", error);
-    res.status(500).json({ message: "Internal server error." });
-  }
-});
-    
 // Create transporter with full debug logging
 export const transporter = nodemailer.createTransport({
   service: "gmail",
