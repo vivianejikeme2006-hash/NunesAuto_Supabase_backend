@@ -1,16 +1,16 @@
 import express from 'express';
 import { createClient } from "@supabase/supabase-js";
-import 'dotenv/config'; 
+import 'dotenv/config';
 import cors from 'cors';
 import { Buffer } from "buffer";
 import nodemailer from "nodemailer";
-import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 
 const port = 3000;
 const app = express();
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
 });
 
 const allowedOrigins = [
@@ -180,7 +180,56 @@ app.get("/parts", async (req, res) => {
     }
 });
 
+// AI CHATBOT ENDPOINT
 
+app.post("/chat", async (req, res) => {
+  try {
+    const { message } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({
+        message: "Please enter a message.",
+      });
+    }
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.8-flash",
+      contents: `
+You are the NunesAuto AI Assistant.
+
+NunesAuto is a car-parts website.
+
+Help customers with:
+- Car parts
+- Vehicle makes and models
+- Finding suitable parts
+- General NunesAuto information
+
+Be friendly, helpful and concise.
+
+If you are not sure about a specific product,
+do not make up information.
+
+Tell the customer to check the available products
+or contact NunesAuto.
+
+Customer message:
+${message}
+      `,
+    });
+
+    return res.status(200).json({
+      reply: response.text,
+    });
+
+  } catch (error) {
+    console.error("Gemini chatbot error:", error);
+
+    return res.status(500).json({
+      message: "Unable to get a response from the AI.",
+    });
+  }
+});
 
 // CALLING THE AUTHENTICATION FUNCTION
 // Everything below this requires authentication
@@ -305,6 +354,28 @@ console.log("Product successfully deleted",data);
   }
 });
 
+
+
+// Get All Parts
+app.get("/parts", async (req, res) => {
+});
+
+
+
+// AI CHATBOT ENDPOINT
+
+app.post("/chat", async (req, res) => {
+});
+
+
+// CALLING THE AUTHENTICATION FUNCTION
+// Everything below this requires authentication
+app.use(authentication);
+
+
+// POST - Add item to cart
+app.post("/addToCart", async (req, res) => {
+});
 
 
 // INSPECTING VIVIANS ENDPOINTS TO BE TESTED WITH POSTMAN
